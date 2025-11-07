@@ -33,8 +33,8 @@ module.exports = {
 ⏳ Total Time Running:
 💫 ${uptimeString}
 
-👑 Bot by: @JamesDahao
-🔗 Facebook: https://www.facebook.com/profile.php?id=100044075747232
+👑 Bot by: Aminulsardar
+🔗 Facebook: https://www.facebook.com/profile.php?id=100071880593545
 `;
 
     return api.sendMessage(message, event.threadID);
