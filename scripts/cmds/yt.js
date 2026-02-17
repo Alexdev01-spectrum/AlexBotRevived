@@ -1,5 +1,5 @@
 const axios = require("axios");
-const fs = require("fs");
+const fs = require("fs-extra");
 const path = require("path");
 const https = require("https");
 
@@ -23,16 +23,18 @@ module.exports = {
 
   onStart: async function({ api, event, args }) {
     const threadID = event.threadID;
+    const messageID = event.messageID;
 
     const query = args.join(" ").trim();
-    if (!query) return api.sendMessage("❌ Please provide a search term!", threadID, event.messageID);
+    if (!query) return api.sendMessage("❌ Please provide a search term!", threadID, messageID);
 
     try {
+      // Fixed: Using correct search API endpoint
       const res = await axios.get(`https://aminul-youtube-api.vercel.app/search?query=${encodeURIComponent(query)}`);
       const data = res.data;
 
       if (!data || data.length === 0) {
-        return api.sendMessage("😔 No videos found! Try another keyword.", threadID, event.messageID);
+        return api.sendMessage("😔 No videos found! Try another keyword.", threadID, messageID);
       }
 
       const videos = data.slice(0, 5); // Top 5 results
@@ -51,79 +53,141 @@ module.exports = {
         msg += `👁 Views: ${v.views?.toLocaleString() || "N/A"}\n`;
         msg += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
 
+        // Download thumbnail if available
         if (v.thumbnail) {
-          const thumbPath = await downloadImage(v.thumbnail, `thumb_${threadID}_${i}.jpg`);
-          attachments.push(fs.createReadStream(thumbPath));
+          try {
+            const thumbPath = await downloadImage(v.thumbnail, `thumb_${threadID}_${i}.jpg`);
+            attachments.push(fs.createReadStream(thumbPath));
+          } catch (thumbErr) {
+            console.error("Thumbnail download error:", thumbErr);
+          }
         }
       }
 
       msg += `\n📥 Reply with **1-${videos.length}** to download your chosen video!\n⚡ Powered by Aminul API`;
 
-      return api.sendMessage({ body: msg, attachment: attachments }, threadID);
+      return api.sendMessage({ 
+        body: msg, 
+        attachment: attachments.length > 0 ? attachments : null 
+      }, threadID, messageID);
 
     } catch (err) {
-      console.error(err);
-      api.sendMessage("⚠️ Failed to fetch YouTube videos. Try again later.", threadID, event.messageID);
+      console.error("Search error:", err);
+      api.sendMessage("⚠️ Failed to fetch YouTube videos. Try again later.", threadID, messageID);
     }
   },
 
   onChat: async function({ api, event }) {
     const threadID = event.threadID;
-    const message = event.body.trim();
+    const messageID = event.messageID;
+    const message = event.body?.trim();
 
-    if (pendingDownloads[threadID] && /^[1-5]$/.test(message)) {
-      const index = parseInt(message) - 1;
-      const video = pendingDownloads[threadID][index];
-      if (!video) return api.sendMessage("❌ Invalid selection!", threadID, event.messageID);
+    if (!message || !pendingDownloads[threadID] || !/^[1-5]$/.test(message)) return;
 
-      const title = video.title;
-      const url = video.url;
+    const index = parseInt(message) - 1;
+    const video = pendingDownloads[threadID][index];
+    
+    if (!video) {
+      return api.sendMessage("❌ Invalid selection!", threadID, messageID);
+    }
 
-      api.sendMessage(`⏳ Downloading **${title}**... Please wait!`, threadID);
+    const title = video.title;
+    const url = video.url;
 
-      try {
-        const downloadInfo = await axios.get(`https://aminul-rest-api-three.vercel.app/downloader/alldownloader?url=${encodeURIComponent(url)}`);
-        const videoUrl = downloadInfo.data.data.high || downloadInfo.data.data.low;
-        if (!videoUrl) return api.sendMessage("❌ Cannot download this video. It may be restricted.", threadID, event.messageID);
+    // Send initial loading message
+    const loadingMsg = await api.sendMessage(`⏳ Downloading **${title}**... Please wait!`, threadID);
 
-        const filePath = path.join(__dirname, `video_${threadID}.mp4`);
-
-        await downloadFile(videoUrl, filePath);
-
-        api.sendMessage({
-          body: `✅ Successfully downloaded: **${title}**\n🎉 Enjoy your video!`,
-          attachment: fs.createReadStream(filePath)
-        }, threadID, () => fs.unlinkSync(filePath));
-
-      } catch (err) {
-        console.error(err);
-        api.sendMessage("❌ Error occurred while downloading the video. Try again later.", threadID, event.messageID);
+    try {
+      // Fixed: Using correct downloader API endpoint
+      const downloadInfo = await axios.get(`https://aminul-rest-api-three.vercel.app/downloader/alldownloader?url=${encodeURIComponent(url)}`);
+      
+      // Fixed: Correct data path from API response
+      const videoData = downloadInfo.data?.data?.data;
+      if (!videoData) {
+        throw new Error("Invalid API response structure");
       }
 
-      delete pendingDownloads[threadID];
+      const videoUrl = videoData.high || videoData.low;
+      if (!videoUrl) {
+        return api.sendMessage("❌ Cannot download this video. It may be restricted.", threadID, messageID);
+      }
+
+      // Create cache directory if it doesn't exist
+      const cacheDir = path.join(__dirname, "cache");
+      await fs.ensureDir(cacheDir);
+
+      const filePath = path.join(cacheDir, `yt_${threadID}_${Date.now()}.mp4`);
+
+      await downloadFile(videoUrl, filePath);
+
+      await api.sendMessage({
+        body: `✅ **Download Successful!**\n\n🎬 **Title:** ${title}\n📥 Your video is ready!`,
+        attachment: fs.createReadStream(filePath)
+      }, threadID, () => {
+        // Clean up file after sending
+        fs.unlinkSync(filePath);
+      });
+
+      // Clean up thumbnails
+      for (let i = 0; i < 5; i++) {
+        const thumbPath = path.join(__dirname, `thumb_${threadID}_${i}.jpg`);
+        if (fs.existsSync(thumbPath)) {
+          fs.unlinkSync(thumbPath);
+        }
+      }
+
+    } catch (err) {
+      console.error("Download error:", err);
+      api.sendMessage("❌ Error occurred while downloading the video. Try again later.", threadID, messageID);
     }
+
+    // Clear pending downloads
+    delete pendingDownloads[threadID];
   }
 };
 
-// Helper: download thumbnail or video
+// Helper: download thumbnail
 async function downloadImage(url, filename) {
-  const response = await axios.get(url, { responseType: "arraybuffer" });
-  const filePath = path.join(__dirname, filename);
-  fs.writeFileSync(filePath, response.data);
-  return filePath;
+  try {
+    const response = await axios({
+      method: 'GET',
+      url: url,
+      responseType: 'arraybuffer'
+    });
+    
+    const filePath = path.join(__dirname, filename);
+    await fs.writeFile(filePath, response.data);
+    return filePath;
+  } catch (error) {
+    throw new Error(`Failed to download image: ${error.message}`);
+  }
 }
 
+// Helper: download video file
 function downloadFile(url, filepath) {
   return new Promise((resolve, reject) => {
     const file = fs.createWriteStream(filepath);
-    https.get(url, (res) => {
-      res.pipe(file);
-      file.on("finish", () => {
-        file.close(resolve);
+    
+    https.get(url, (response) => {
+      // Check for redirects
+      if (response.statusCode === 301 || response.statusCode === 302) {
+        const redirectUrl = response.headers.location;
+        return downloadFile(redirectUrl, filepath).then(resolve).catch(reject);
+      }
+
+      response.pipe(file);
+      
+      file.on('finish', () => {
+        file.close();
+        resolve();
       });
-    }).on("error", (err) => {
-      fs.unlinkSync(filepath);
+      
+    }).on('error', (err) => {
+      // Clean up failed download
+      if (fs.existsSync(filepath)) {
+        fs.unlinkSync(filepath);
+      }
       reject(err);
     });
   });
-}
+        }
