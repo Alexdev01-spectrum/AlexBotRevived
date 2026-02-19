@@ -8,11 +8,9 @@
     "npm": ">=10.0.0"
   },
   "dependencies": {
-    "@distube/ytdl-core": "^4.13.3",
     "aminul-new-fca": "^1.0.26",
     "axios": "^1.4.0",
     "bluebird": "^3.7.2",
-    "bcrypt": "^5.0.1",
     "canvas": "^2.9.1",
     "cheerio": "^1.0.0-rc.12",
     "child_process": "^1.0.2",
