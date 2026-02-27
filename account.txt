@@ -10,13 +10,10 @@
     },
     {
         "key": "sb",
-        "value": "n4zHaMkE1Te8taVnQ_jH0YU7",
-        "domain": "facebook.com",
-        "path": "/",
-        "hostOnly": false,
+        "stOnly": false,
         "creation": "2026-02-27T15:34:38.566Z",
         "lastAccessed": "2026-02-27T15:34:38.566Z"
-    },
+    
     {
         "key": "ps_l",
         "value": "1",
