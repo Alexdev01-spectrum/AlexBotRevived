@@ -1,14 +1,10 @@
 // main.js
-// Auto-restart + Express server for Goat.js
-
-"use strict";
+// Combined auto-restart + express server
 
 const { spawn } = require("child_process");
-const express = require("express");
 const log = require("./logger/log.js");
-
-const app = express();
-const PORT = process.env.PORT || 3000;
+const express = require("express");
+const path = require("path");
 
 let restartCount = 0;
 const maxRestarts = 5;
@@ -31,13 +27,11 @@ function startProject() {
 		} else if (restartCount >= maxRestarts) {
 			log.err("RESTART", "Maximum restart attempts reached. Stopping...");
 			process.exit(1);
-		} else if (code !== 0) {
-			log.err("PROCESS", `Goat.js exited with code ${code}. No restart triggered.`);
 		}
 	});
 
 	child.on("error", (err) => {
-		log.err("STARTUP", `Failed to start project: ${err.message}`);
+		log.err("STARTUP", "Failed to start project:", err);
 		process.exit(1);
 	});
 }
@@ -47,6 +41,23 @@ setInterval(() => {
 	restartCount = 0;
 }, 300000);
 
-// Health check endpoint
-// Start Goat.js process
 startProject();
+
+/**
+ * Express server setup
+ */
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+// Serve static files from public directory
+app.use(express.static(path.join(__dirname, "public")));
+
+// Default route → index.html
+app.get("/", (req, res) => {
+	res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+// Start server
+app.listen(PORT, "0.0.0.0", () => {
+	log.info("SERVER", `Web server running at http://0.0.0.0:${PORT}`);
+});
