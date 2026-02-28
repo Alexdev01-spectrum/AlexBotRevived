@@ -19,15 +19,15 @@
     ]
   },
   "adminBot": [
-    "100071880593545",
+    "61574858855564",
     ""
   ],
   "DEV": [
-    "100071880593545",
+    "61574858855564",
     ""
   ],
   "GOD": [
-    "100071880593545",
+    "61574858855564",
     ""
   ],
   "whiteListMode": {
@@ -35,12 +35,12 @@
     "whiteListIds": [],
     "notes": "if you enable this feature, only the ids in the whiteListIds section can use the bot"
   },
-  "nickNameBot": "Goat-Bot-V2",
+  "nickNameBot": "AlexBot Revived 💀",
   "prefix": "/",
   "autoSetNickname": true,
-  "authorFB": "https://www.facebook.com/profile.php?id=100071880593545",
-  "authorName": "AminulSardar",
-  "authorEmail": "secret",
+  "authorFB": "https://www.facebook.com/profile.php?id=61574858855564",
+  "authorName": "Alex Jhon Ponce",
+  "authorEmail": "alexusa010101@gmail.com",
   "database": {
     "type": "sqlite",
     "uriMongodb": "",
